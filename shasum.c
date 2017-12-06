@@ -1,17 +1,16 @@
-
 #include <assert.h>
 #include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-#define rot32(a , b) (((a) >> (b)) | ((a) << (32 - (b))))
-#define ch(x,y,z) (((x) & (y)) ^ (~(x) & (z)))
-#define maj(x,y,z) (((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)))
-#define ep0(x) (rot32(x,2) ^ rot32(x,13) ^ rot32(x,22))
-#define ep1(x) (rot32(x,6) ^ rot32(x,11) ^ rot32(x,25))
-#define sig0(x) (rot32(x,7) ^ rot32(x,18) ^ ((x) >> 3))
-#define sig1(x) (rot32(x,17) ^ rot32(x,19) ^ ((x) >> 10))
+#define rot32(a, b) (((a) >> (b)) | ((a) << (32 - (b))))
+#define ch(x, y, z) (((x) & (y)) ^ (~(x) & (z)))
+#define maj(x, y, z) (((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)))
+#define ep0(x) (rot32(x, 2) ^ rot32(x, 13) ^ rot32(x, 22))
+#define ep1(x) (rot32(x, 6) ^ rot32(x, 11) ^ rot32(x, 25))
+#define sig0(x) (rot32(x, 7) ^ rot32(x, 18) ^ ((x) >> 3))
+#define sig1(x) (rot32(x, 17) ^ rot32(x, 19) ^ ((x) >> 10))
 
 typedef struct {
   uint32_t values[8];
@@ -31,8 +30,8 @@ void print_shasum(const shasum_t s, const char *name) {
 
 uint32_t endian_swap(const uint32_t num) {
   return ((num >> 24) & 0x000000ff) | // move byte 3 to byte 0
-         ((num <<  8) & 0x00ff0000) | // move byte 1 to byte 2
-         ((num >>  8) & 0x0000ff00) | // move byte 2 to byte 1
+         ((num << 8) & 0x00ff0000) |  // move byte 1 to byte 2
+         ((num >> 8) & 0x0000ff00) |  // move byte 2 to byte 1
          ((num << 24) & 0xff000000);
 }
 
@@ -96,7 +95,7 @@ shasum_t SHA(FILE *f, const int is_stdin) {
   }
 
   for (int i = 0; i < total_size; i += 64) {
-    const uint32_t *chunk = (uint32_t*)&buffer[i];
+    const uint32_t *chunk = (uint32_t *)&buffer[i];
     for (int j = 0; j < 16; j++)
       w[j] = endian_swap(chunk[j]);
 
@@ -109,18 +108,29 @@ shasum_t SHA(FILE *f, const int is_stdin) {
       const uint32_t t1 = h + ep1(e) + ch(e, f, g) + k[j] + w[j],
                      t2 = ep0(a) + maj(a, b, c);
 
-      h = g; g = f; f = e; e = d + t1;
-      d = c; c = b; b = a; a = t1 + t2;
+      h = g;
+      g = f;
+      f = e;
+      e = d + t1;
+      d = c;
+      c = b;
+      b = a;
+      a = t1 + t2;
     }
 
-    h0 += a; h1 += b; h2 += c; h3 += d;
-    h4 += e; h5 += f; h6 += g; h7 += h;
+    h0 += a;
+    h1 += b;
+    h2 += c;
+    h3 += d;
+    h4 += e;
+    h5 += f;
+    h6 += g;
+    h7 += h;
   }
 
   free(buffer);
   return (shasum_t){{h0, h1, h2, h3, h4, h5, h6, h7}};
 }
-
 
 int main(int argc, char *argv[]) {
   if (argc < 2) {
