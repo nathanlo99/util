@@ -141,7 +141,7 @@ Matrix<T>& Matrix<T>::operator*=(const Matrix<T>& rhs) {
     return *this;
 }
 
-// TODO check loop order for cache locality???
+// TODO check loop order for cache locality??
 template<typename T>
 Matrix<T> Matrix<T>::transpose() {
     Matrix<T> result(m_cols, m_rows);
@@ -212,6 +212,24 @@ Matrix<T> Matrix<T>::concat(const Matrix<T>& rhs) {
     }
     return result;
 }
+
+template<typename T>
+std::vector<T> Matrix<T>::operator*(const std::vector<T>& rhs) {
+    if (rhs.size() != m_cols)
+        warn("Matrix::operator*(vector)", "Cannot multiply vector");
+
+    std::vector<T> result;
+    result.resize(m_rows);
+    for (unsigned int i = 0; i < m_rows; i++) {
+        double sum = 0.0;
+        for (unsigned int j = 0; j < m_cols; j++) {
+            sum += m_data[i][j] * rhs[j];
+        }
+        result[i] = sum;
+    }
+    return result;
+}
+
 
 // Accessors
 template<typename T>
