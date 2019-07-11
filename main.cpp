@@ -2,11 +2,7 @@
 #include <iostream>
 
 int main() {
-  util::string a = "A", b = "B";
-  util::string tmp;
-  std::cout << "a = " << (void *)&a << std::endl;
-  std::cout << "b = " << (void *)&b << std::endl;
-  std::cout << "tmp = " << (void *)&tmp << std::endl;
+  util::string a = util::string{""} + "", b = util::string{""}, tmp;
   tmp = a;
   a = b;
   b = tmp;
