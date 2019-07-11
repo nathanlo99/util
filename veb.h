@@ -1,24 +1,18 @@
 
 #pragma once
 
+#include <cassert>
 #include <vector>
 #include <iostream>
 #include <ostream>
 #include <unordered_map>
 #include <memory>
 
-static int debug_depth = 0;
-
-static std::string debug_pad() { return std::string(debug_depth, '\t'); }
-static void increase_depth() { debug_depth++; }
-static void decrease_depth() { debug_depth--; }
-static std::ostream& debug() { return std::cout << debug_pad(); }
-
 template <typename T, unsigned int w>
 class VEBtree
 {
     static constexpr unsigned int half_w = w >> 1;
-    static constexpr T mask = (1 << half_w) - 1;
+    static constexpr T mask = ((T)1 << half_w) - 1;
     static constexpr T INFINITY = -1;
 
     T min = INFINITY, max = 0;
@@ -31,9 +25,9 @@ public:
 	static_assert((w & (w - 1)) == 0, "w given to VEBtree was not power of 2");
     }
 
-    VEBtree(T val): min{val}, max{val} {}
+    VEBtree(const T val): min{val}, max{val} {}
     
-    std::vector<T> traverse()
+    inline std::vector<T> traverse() const noexcept
     {
         std::vector<T> result;
         if (min == INFINITY) 
@@ -44,88 +38,84 @@ public:
         std::vector<T> summary_traversal = summary->traverse();
         for (T cluster : summary_traversal)
         {
-            std::vector<T> cluster_traversal = clusters[cluster].traverse();
+            const std::vector<T> cluster_traversal = clusters[cluster].traverse();
             for (T num : cluster_traversal)
                 result.push_back((cluster << half_w) | num);
         }
         return result;
     }
 
-    void insert(T val)
+    inline void insert(const T val) noexcept
     {
-        increase_depth();
-        debug() << "Inserting " << val << std::endl;
-
+        // Update max
 	if (val > max)
 	    max = val;
-	if (empty()) 
-	{
-            debug() << "Inserting into empty" << std::endl;
+        // If empty: just set to min
+	if (min == INFINITY) {
 	    min = val;
-            decrease_depth();
 	    return;
 	}
-
-	if (val < min) std::swap(val, min);
-	const T cluster = val >> half_w, idx = val & mask;
-        debug() << "Cluster = " << cluster << ", Idx = " << idx << std::endl;
+        // If we're equal to min, avoid double insertion
+        if (val == min) return;
+        // If we're smaller than min, put val into min and insert min into deeper structure
+        // Break up our val into two halves
+        T cluster, idx;
+        if (val < min) {
+	    cluster = min >> half_w;
+            idx = min & mask;
+            min = val;
+        } else {
+            cluster = val >> half_w; 
+            idx = val & mask;
+        }
+        // If the cluster already exists, insert it recursively into the cluster
 	if (clusters.count(cluster))
-	{
-            debug() << "Recursing into cluster" << std::endl;
-	    clusters[cluster].insert(idx); 
-	}
-	else
-	{
-            debug() << "Recursing into summary" << std::endl;
-	    clusters[cluster] = VEBtree<T, half_w>{idx};
+            clusters[cluster].insert(idx); 
+        // Otherwise, create a new cluster, shallow insert idx and insert the cluster number into our summary
+	else {
+	    clusters[cluster] = VEBtree<T, half_w>(idx);
             if (summary)
 	        summary->insert(cluster); // Recursive call
             else
                 summary = std::make_unique<VEBtree<T, half_w>>(cluster);
 	}
-        decrease_depth();
     }
 
-    T predecessor(T val)
+    inline T predecessor(const T val) const noexcept
     {
-        increase_depth();
-        debug() << "Predecessor " << val << std::endl;
+        // If the val is less than min, it has no predecessor
 	if (val <= min)
-	    return (decrease_depth(), INFINITY);
+	    return INFINITY;
+        // If the val is greater than max, its predecessor is max
 	if (val > max)
-	    return (decrease_depth(), max);
+	    return max;
+        // Break up val into halves
 	const T cluster = val >> half_w, idx = val & mask;
-        debug() << "Not a trivial case..." << std::endl;
-	if (clusters.count(cluster) == 0 || clusters[cluster].getMin() >= val)
-	{
-            debug() << "First case" << std::endl;
+        // If the supposed cluster doesn't exist, or idx is <= the cluster's min,
+        //     this implies that val has no predecessors in clusters[cluster].
+        //     We have to find the next closest cluster to its left and find its max.
+        //     If this max doesn't exist (ie new_cluster == INFINITY), then
+        //     the next smallest number is min.
+	if (clusters.count(cluster) == 0 || idx <= clusters.at(cluster).getMin()) {
             if (!summary)
-                return min;
-	    const T new_cluster = summary->predecessor(cluster);
-            debug() << "new_cluster = " << new_cluster << std::endl;
-            if (new_cluster == INFINITY)
-            {
-                decrease_depth();
                 return (min < val) ? min : INFINITY;
-            }
-            decrease_depth();
-	    return (new_cluster << half_w) | clusters[new_cluster].getMax();
-	}
-	else
-	{      
-            debug() << "Second case" << std::endl;
-            decrease_depth();
-	    return (cluster << half_w) | clusters[cluster].predecessor(idx);
-	}
+	    const T new_cluster = summary->predecessor(cluster);
+            if (new_cluster == INFINITY)
+                return (min < val) ? min : INFINITY;
+	    return (new_cluster << half_w) | clusters.at(new_cluster).getMax();
+        // Otherwise, the predecessor is in the cluster, so just recursively find it
+	} else {
+	    return (cluster << half_w) | clusters.at(cluster).predecessor(idx);
+        }
     }
 
-    bool empty()
+    inline bool empty() const noexcept
     { return min == INFINITY; }
 
-    T getMin()
+    inline T getMin() const noexcept
     { return min; }
 
-    T getMax()
+    inline T getMax() const noexcept
     { return max; }
 };
 
@@ -137,27 +127,25 @@ class VEBtree<T, 1>
     bool hasZero = 0, hasOne = 0;
 
 public:
-    VEBtree() 
-    {}
+    VEBtree() {}
 
-    VEBtree(T val): hasZero{!val}, hasOne{!!val}
-    {}
+    VEBtree(T val): hasZero{!val}, hasOne{!!val} {}
 
-    std::vector<T> traverse()
+    std::vector<T> traverse() const noexcept
     { return (hasZero && hasOne) ? std::vector<T>{0, 1} : (hasZero ? std::vector<T>{0} : std::vector<T>{1}); }
 
-    void insert(const T val) 
+    void insert(const T val) noexcept
     { val ? (hasOne = 1) : (hasZero = 1); }
 
-    T predecessor(T val) 
-    { return val && hasOne; }
+    T predecessor(const T val) const noexcept
+    { return (val && hasZero) ? 0 : INFINITY; }
 
-    bool empty()
+    bool empty() const noexcept
     { return !hasZero && !hasOne; }
 
-    T getMin() 
+    T getMin() const noexcept
     { return hasZero ? 0 : (hasOne ? 1 : INFINITY); }
 
-    T getMax()
+    T getMax() const noexcept
     { return hasOne; }
 };
