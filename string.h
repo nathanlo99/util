@@ -9,7 +9,8 @@
 #include <limits>
 #include <stdexcept>
 
-constexpr unsigned int roundup(unsigned int v) {
+// TODO: Rewrite parts of this with C string functions wherever possible.
+static constexpr unsigned int roundup(unsigned int v) {
   v |= v >> 1;
   v |= v >> 2;
   v |= v >> 4;
@@ -21,12 +22,21 @@ constexpr unsigned int roundup(unsigned int v) {
 // Defines a heap-allocated c-string
 namespace util {
 class string {
-  static constexpr size_t npos = -1;
-  static constexpr size_t max_size_t = std::numeric_limits<size_t>::max();
+  using value_type = char;
+  using traits_type = std::char_traits<char>;
+  using allocator_type = std::allocator<char>;
+  using reference = char &;
+  using const_reference = const char &;
+  using pointer = char *;
+  using const_pointer = const char *;
   using iterator = char *;
   using const_iterator = char *;
   using reverse_iterator = std::reverse_iterator<char *>;
   using const_reverse_iterator = std::reverse_iterator<char *>;
+  using difference_type = ptrdiff_t;
+  using size_type = size_t;
+  static constexpr size_type npos = std::numeric_limits<size_type>::max();
+
   size_t m_size, m_cap;
   char *m_data;
 
@@ -216,7 +226,7 @@ public:
 
   size_t size() const noexcept { return m_size; }
   size_t length() const noexcept { return m_size; }
-  size_t max_size() const noexcept { return max_size_t; }
+  size_t max_size() const noexcept { return npos; }
 
   void resize(size_t n, char c = '\0') {
     const size_t old_size = m_size;
@@ -271,6 +281,62 @@ public:
   char &front() { return m_data[0]; }
   const char &front() const { return m_data[0]; }
 
+  string &operator+=(const string &str);                           // TODO
+  string &operator+=(const char *s);                               // TODO
+  string &operator+=(char c);                                      // TODO
+  string &operator+=(std::initializer_list<char> il);              // TODO
+  string &append(const string &str);                               // TODO
+  string &append(const string &str, size_t subpos, size_t sublen); // TODO
+  string &append(const char *s);                                   // TODO
+  string &append(const char *s, size_t n);                         // TODO
+  template <class InputIterator>
+  string &append(InputIterator first, InputIterator last); // TODO
+  string &append(std::initializer_list<char> il);          // TODO
+  void push_back(char c);                                  // TODO
+  string &assign(const string &str);                       // TODO
+  string &assign(const string &str, size_t subpos,
+                 size_t sublen = npos);                    // TODO
+  string &assign(const char *s);                           // TODO
+  string &assign(const char *s, size_t n);                 // TODO
+  string &assign(size_t n, char c);                        // TODO
+  template <class InputIterator>                           // TODO
+  string &assign(InputIterator first, InputIterator last); // TODO
+  string &assign(std::initializer_list<char> il);          // TODO
+  string &assign(string &&str) noexcept;                   // TODO
+  string &insert(size_t pos, const string &str);           // TODO
+  string &insert(size_t pos, const string &str, size_t subpos,
+                 size_t sublen = npos);                                 // TODO
+  string &insert(size_t pos, const char *s);                            // TODO
+  string &insert(size_t pos, const char *s, size_t n);                  // TODO
+  string &insert(size_t pos, size_t n, char c);                         // TODO
+  iterator insert(const_iterator p, size_t n, char c);                  // TODO
+  iterator insert(const_iterator p, char c);                            // TODO
+  template <class InputIterator>                                        // TODO
+  iterator insert(iterator p, InputIterator first, InputIterator last); // TODO
+  string &insert(const_iterator p, std::initializer_list<char> il);     // TODO
+  string &erase(size_t pos = 0, size_t len = npos);                     // TODO
+  iterator erase(const_iterator p);                                     // TODO
+  iterator erase(const_iterator first, const_iterator last);            // TODO
+
+  string &replace(size_t pos, size_t len, const string &str);
+  string &replace(const_iterator i1, const_iterator i2, const string &str);
+  string &replace(size_t pos, size_t len, const string &str, size_t subpos,
+                  size_t sublen = npos);
+  string &replace(size_t pos, size_t len, const char *s);
+  string &replace(const_iterator i1, const_iterator i2, const char *s);
+  string &replace(size_t pos, size_t len, const char *s, size_t n);
+  string &replace(const_iterator i1, const_iterator i2, const char *s,
+                  size_t n);
+  string &replace(size_t pos, size_t len, size_t n, char c);
+  string &replace(const_iterator i1, const_iterator i2, size_t n, char c);
+  template <class InputIterator>
+  string &replace(const_iterator i1, const_iterator i2, InputIterator first,
+                  InputIterator last);
+  string &replace(const_iterator i1, const_iterator i2,
+                  std::initializer_list<char> il);
+  void swap(string &str);
+  void pop_back() { --m_size; }
+
   const string operator+(const char *str) const {
     const size_t new_size = m_size + strlen(str);
     size_t new_cap = roundup(new_size + 1);
@@ -284,8 +350,8 @@ public:
   }
 
   // TODO: Verify that no optimizations are possible
-  string &operator+=(const string &rhs) { return *this = *this + rhs; }
-  string &operator+=(const char *str) { return *this = *this + str; }
+  // string &operator+=(const string &rhs) { return *this = *this + rhs; }
+  // string &operator+=(const char *str) { return *this = *this + str; }
 
   const string operator+(const string &other) const {
     return *this + other.m_data;
