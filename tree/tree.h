@@ -87,12 +87,62 @@ bytestream stdSortStream(const std::vector<point> &points) {
     return bfs_stream;
 }
 
-
-template <typename T>
-bytestream getOctreeStreamNaive(std::vector<point> points) {
-    // Naive implementation: Insert points into an octree and BFS
-    // - Used for benchmarking
-    const T octree{points};
-    return octree.bfs();
-}
+bytestream radixSortStream(const std::vector<point> &points) {
+    // Prepare the stream
+    bytestream stream;
+    stream.reserve(3 * points.size());
+    const size_t n = points.size();
+    // Interleave the bits
+    std::vector<uint64_t> data[2] = {std::vector<uint64_t>(n, 0), std::vector<uint64_t>(n, 0)};
+    std::transform(points.begin(), points.end(), data[0].begin(), &interleave);
+    
+    // Because our implementation requires some scratch space, we instantiate two arrays of length n:
+    // one of which is the 'data'(interleaved) array, and the other is the scratch array.
+    // The `which` boolean indicates which array provides the data.
+    // The queue contains tuples (which, lower, upper, depth) with the same meanings as in stdSortStream.
+    std::queue<std::tuple<bool, size_t, size_t, size_t> > pq;
+    // These are counter arrays which are encountered in bucket sorting. 
+    // We have 8 buckets and thus need 8 counters.
+    std::array<size_t, 8> cnts, offsets;
+    pq.push({0, 0, n, 45});
+    while (!pq.empty()) {
+        // Extract information from the queue
+        const auto [which, lower, upper, depth] = pq.front(); pq.pop();
+        std::vector<uint64_t> &interleaved = data[which], &scratch = data[1-which];
+        if (lower == upper) continue;
+        // If the interval contains a single item, it is a leaf.
+        if (lower == upper - 1) {
+            stream.push_back(0);
+            continue;
+        }
+        cnts = {0};
+        byte mask = 0;
+        // Count the number of elements in each bucket, and also update the occupancy mask
+        for (size_t i = lower; i < upper; ++i) {
+            const size_t oct = (interleaved[i] >> depth) & 7;
+            ++cnts[oct];
+            mask |= (1 << oct);
+        }
+        
+        // Calculate the bucket offsets
+        offsets[0] = lower;
+        for (size_t i = 1; i < 8; ++i) 
+            offsets[i] = offsets[i-1] + cnts[i-1];
+        
+        // Using the bucket offsets, place items into the appropriate slots in the scratch array
+        for (size_t i = lower; i < upper; ++i) {
+            const size_t oct = (interleaved[i] >> depth) & 7;
+            const size_t idx = offsets[oct]++;
+            scratch[idx] = interleaved[i];
+        }
+        // Push the occupancy byte
+        stream.push_back(mask);
+        // Recurse on the buckets **switching the roles of scratch and data** (which' = 1-which)
+        pq.push({1-which, lower, offsets[0], depth - 3});
+        for (size_t i = 1; i < 8; ++i)
+            pq.push({1-which, offsets[i-1], offsets[i], depth - 3});
+    }
+    // Once the queue is exhausted, the traversal is complete, so the bytestream is finished
+    return stream;
+}       
 
