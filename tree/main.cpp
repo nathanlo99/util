@@ -40,12 +40,13 @@ void benchmark_stdsortstream() {
 
 void benchmark_radixsortstream() {
     using milli = std::chrono::milliseconds;
-    const size_t max_points = 10e6;
+    const size_t max_points = 10e7;
     std::vector<point> template_points(max_points, {0, 0, 0});
     for (size_t i = 0; i < template_points.size(); ++i)
         template_points[i] = {rnd(), rnd(), rnd()};
 
-    for (size_t num_points : {10e3, 25e3, 10e4, 25e4, 10e5, 25e5, 10e6}) {
+    for (size_t num_points : {10e3, 25e3, 10e4, 25e4, 10e5, 25e5, 10e6, 25e6}) {
+	assert(num_points <= max_points);
 	const std::vector<point> points(template_points.begin(), template_points.begin() + num_points);
 	const auto& start = std::chrono::high_resolution_clock::now();
 	const bytestream& stream = radixSortStream(points);	
@@ -59,6 +60,6 @@ void benchmark_radixsortstream() {
 
 int main() {
     _morton<255>::add_values(mkeys);
-    benchmark_stdsortstream();
+    // benchmark_stdsortstream();
     benchmark_radixsortstream();
 }
