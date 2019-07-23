@@ -79,7 +79,7 @@ shasum_t SHA(FILE *f, const int is_stdin) {
   assert(total_size % 64 == 0);
 
   if (!buffer)
-    fclose(f), fputs("File is too big\n", stderr), exit(1);
+    { fclose(f), fputs("File is too big\n", stderr); return; }
   if (size > 0 && fread(buffer, size, 1, f) != 1) {
     fclose(f), free(buffer);
     fputs("Could not read file\n", stderr), exit(1);
