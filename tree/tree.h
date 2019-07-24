@@ -18,7 +18,8 @@ using byte = uint8_t;
 using coord = uint32_t;
 using point = std::array<coord, 3>;
 using bytestream = std::vector<byte>;
-using bitstream = std::vector<bool>;
+using bitstream = std::vector<byte>;
+using stream_istate = std::pair<byte, int>;
 
 uint64_t interleave(const point &arr) {
     return _interleave(arr[0], arr[1], arr[2]);
@@ -51,15 +52,55 @@ bool validByteStream(const bytestream &stream, const bitstream& bitstream) {
     return stream_it == stream.cend();
 }
 
+inline void bitstream_append(bitstream &bit_stream, stream_istate& state, const uint64_t val, int num_bits) {
+    if (state.second + num_bits <= 8) {
+        state.first = (state.first << num_bits) | val;
+        state.second += num_bits;
+        if (state.second == 8) {
+            bit_stream.push_back(state.first);
+            state.first = 0;
+            state.second = 0;
+        }
+    } else {
+        const int first_amt = 8 - state.second;
+        byte to_write = (state.first << first_amt) | (val >> (num_bits - first_amt));
+        bit_stream.push_back(to_write);
+        num_bits -= first_amt;
+        while (num_bits >= 8) {
+            to_write = val >> (num_bits - 8);
+            bit_stream.push_back(to_write);
+            num_bits -= 8;
+        }
+        state.first = val & ((1 << num_bits) - 1);
+        state.second = num_bits;
+    }
+}
+
+inline void encode_leaf(bitstream &bit_stream, stream_istate& state, const int depth, const uint64_t val) {
+    uint16_t x, y, z;
+    _unpack(val, x, y, z);
+    const uint64_t mask = (1LL << depth) - 1;
+    uint64_t value = 0;
+    value = (value << depth) | (x & mask);
+    value = (value << depth) | (y & mask);
+    value = (value << depth) | (z & mask);
+    bitstream_append(bit_stream, state, value, 3 * depth);
+}
+
 std::pair<bytestream, bitstream> stdSortStream(const std::vector<point> &points) noexcept {
     bytestream bfs_stream;
     bfs_stream.reserve(2 * points.size()); // An upper bound for the memory usage.
+    bitstream bit_stream;
+    stream_istate bit_stream_state{0, 0};
+
     // Interleave the bits
     uint64_t *interleaved = new uint64_t[points.size()];
     std::transform(points.begin(), points.end(), interleaved, &interleave);
     // Sort and remove duplicates: now the elements, interpreted as octal literals, are in leaf-DFS order.
     std::sort(interleaved, interleaved + points.size()); 
     const int num_unique = std::unique(interleaved, interleaved + points.size()) - interleaved;
+    bit_stream.reserve(num_unique * 12);
+    
     // We instantiate a queue, holding elements of the form [lower, upper) and a bit depth to start looking for the octant
     // In particular, we've concluded that the bits [depth + 3 .. 45] are identical for all elements in [lower, upper).
     std::deque<std::tuple<int, int, int>> pq;
@@ -69,6 +110,7 @@ std::pair<bytestream, bitstream> stdSortStream(const std::vector<point> &points)
         // If lower == upper - 1, our range contains a single point, so here's where we encode the leaf (currently just appending (byte)0)
         if (lower == upper - 1) {
             bfs_stream.push_back(0);
+            encode_leaf(bit_stream, bit_stream_state, depth, interleaved[lower]);
             continue;
         }
         // Here's the occupancy mask: the i-th bit corresponds to the existence of the i-th child.
@@ -90,18 +132,23 @@ std::pair<bytestream, bitstream> stdSortStream(const std::vector<point> &points)
         bfs_stream.push_back(mask);
     }
     delete[] interleaved;
-    return {bfs_stream, {}};
+    return {bfs_stream, bit_stream};
 }
 
 std::pair<bytestream, bitstream> radixSortStream(const std::vector<point> &points) noexcept {
     // Prepare the stream
     bytestream stream;
     const int num_points = points.size();
+    bitstream bit_stream;
+    stream_istate bit_stream_state{0, 0};
+
     stream.reserve(2 * num_points); // An upper bound for the memory usage
+    bit_stream.reserve(12 * num_points);
 
     // Interleave the bits
     uint64_t* data[2] = {new uint64_t[num_points], new uint64_t[num_points]};
     std::transform(points.begin(), points.end(), data[0], &interleave);
+    
     
     // Because our implementation requires some scratch space, we instantiate two arrays of length n:
     // one of which is the 'data'(interleaved) array, and the other is the scratch array.
@@ -115,14 +162,6 @@ std::pair<bytestream, bitstream> radixSortStream(const std::vector<point> &point
     while (!pq.empty()) {
         // Extract information from the queue
         const auto [which, lower, upper, depth] = pq.front(); pq.pop_front();
-
-        // This is a valid optimization, but not ideal for code clarity
-        /*
-        if (lower == upper - 1) {
-            stream.push_back(0);
-            continue;
-        }
-        */
 
         const uint64_t* interleaved = data[which];
         uint64_t* scratch = data[1-which];
@@ -141,6 +180,7 @@ std::pair<bytestream, bitstream> radixSortStream(const std::vector<point> &point
         // If all the elements in our set are the same, this is a leaf.
         if (unlikely(all_same)) {
             stream.push_back(0);
+            encode_leaf(bit_stream, bit_stream_state, depth, representative);
             continue;
         }
         
