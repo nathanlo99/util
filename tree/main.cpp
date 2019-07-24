@@ -26,13 +26,13 @@ void benchmark_stdsortstream(const std::vector<point> template_points) {
     for (size_t num_points : {10e3, 25e3, 10e4, 25e4, 10e5, 25e5, 10e6, 25e6}) {
 	const std::vector<point> points(template_points.begin(), template_points.begin() + num_points);
 	const auto& start = std::chrono::high_resolution_clock::now();
-	const bytestream& stream = stdSortStream(points);
+	const auto& [stream, bitstream] = stdSortStream(points);
 	const auto& finish = std::chrono::high_resolution_clock::now();
 	std::cout << "stdSortStream() with " << num_points << " points took "
 		  << std::chrono::duration_cast<milli>(finish - start).count()
 		  << " milliseconds\n";
 	continue;
-        assert(validByteStream(stream));
+        assert(validByteStream(stream, bitstream));
     }
 }
 
@@ -43,15 +43,15 @@ void benchmark_radixsortstream(const std::vector<point> template_points) {
 	assert(num_points <= max_points);
 	const std::vector<point> points(template_points.begin(), template_points.begin() + num_points);
 	const auto& start = std::chrono::high_resolution_clock::now();
-	const bytestream& radix_stream = radixSortStream(points);	
+	const auto& [radix_stream, radix_bitstream] = radixSortStream(points);	
 	const auto& finish = std::chrono::high_resolution_clock::now();
 	std::cout << "radixSortStream() with " << num_points << " points took "
 		  << std::chrono::duration_cast<milli>(finish - start).count()
 		  << " milliseconds\n";
 	continue;
-        const bytestream& std_stream = stdSortStream(points);
-	assert(validByteStream(std_stream));
-        assert(validByteStream(radix_stream));
+        const auto &[std_stream, std_bitstream] = stdSortStream(points);
+	assert(validByteStream(std_stream, std_bitstream));
+        assert(validByteStream(radix_stream, radix_bitstream));
         const auto &[std_it, radix_it] = std::mismatch(std_stream.begin(), std_stream.end(), radix_stream.begin());
         const size_t first_mismatch = std_it - std_stream.begin();
 	if (radix_stream != std_stream) {
